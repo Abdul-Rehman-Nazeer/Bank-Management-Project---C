@@ -7,8 +7,8 @@
 #define MAX_NAME_LENGTH 50
 #define MINIMUM_BALANCE 500
 #define OVERDRAFT_LIMIT 1000
+#define FILENAME "bank_data.dat"
 
-// Structure for account
 typedef struct {
     int accountNumber;
     char name[MAX_NAME_LENGTH];
@@ -16,7 +16,6 @@ typedef struct {
     char accountType; // 'S' for Savings, 'C' for Checking
 } Account;
 
-// Structure for bank
 typedef struct {
     Account accounts[MAX_ACCOUNTS];
     int accountCount;
@@ -25,6 +24,8 @@ typedef struct {
 
 // Function prototypes
 void initializeBank(Bank* bank);
+void loadAccountsFromFile(Bank* bank);
+void saveAccountsToFile(const Bank* bank);
 int createAccount(Bank* bank, const char* name, double initialDeposit, char accountType);
 bool deleteAccount(Bank* bank, int accountNumber);
 Account* findAccount(Bank* bank, int accountNumber);
@@ -32,20 +33,38 @@ bool deposit(Bank* bank, int accountNumber, double amount);
 bool withdraw(Bank* bank, int accountNumber, double amount);
 void displayAccount(const Account* account);
 void displayAllAccounts(const Bank* bank);
+void addInterestToSavings(Bank* bank);
 void displayMenu();
 void handleCreateAccount(Bank* bank);
 void handleDeposit(Bank* bank);
 void handleWithdraw(Bank* bank);
 void handleDeleteAccount(Bank* bank);
 void handleViewAccount(Bank* bank);
+bool saveBankData(const Bank* bank);
+bool loadBankData(Bank* bank);
 
-// Initialize bank
 void initializeBank(Bank* bank) {
     bank->accountCount = 0;
     bank->nextAccountNumber = 1001;
+    loadAccountsFromFile(bank);
 }
 
-// Create a new account
+void loadAccountsFromFile(Bank* bank) {
+    FILE* file = fopen(FILENAME, "rb");
+    if (file != NULL) {
+        fread(bank, sizeof(Bank), 1, file);
+        fclose(file);
+    }
+}
+
+void saveAccountsToFile(const Bank* bank) {
+    FILE* file = fopen(FILENAME, "wb");
+    if (file != NULL) {
+        fwrite(bank, sizeof(Bank), 1, file);
+        fclose(file);
+    }
+}
+
 int createAccount(Bank* bank, const char* name, double initialDeposit, char accountType) {
     if (bank->accountCount >= MAX_ACCOUNTS) {
         printf("Maximum number of accounts reached.\n");
@@ -60,27 +79,24 @@ int createAccount(Bank* bank, const char* name, double initialDeposit, char acco
     newAccount->accountType = accountType;
 
     bank->accountCount++;
+    saveAccountsToFile(bank);
     return newAccount->accountNumber;
 }
 
-// Delete an account
 bool deleteAccount(Bank* bank, int accountNumber) {
-    int i;
-    for (i = 0; i < bank->accountCount; i++) {
+    for (int i = 0; i < bank->accountCount; i++) {
         if (bank->accounts[i].accountNumber == accountNumber) {
-            // Move the last account to this position
             bank->accounts[i] = bank->accounts[bank->accountCount - 1];
             bank->accountCount--;
+            saveAccountsToFile(bank);
             return true;
         }
     }
     return false;
 }
 
-// Find an account
 Account* findAccount(Bank* bank, int accountNumber) {
-    int i;
-    for (i = 0; i < bank->accountCount; i++) {
+    for (int i = 0; i < bank->accountCount; i++) {
         if (bank->accounts[i].accountNumber == accountNumber) {
             return &bank->accounts[i];
         }
@@ -88,7 +104,6 @@ Account* findAccount(Bank* bank, int accountNumber) {
     return NULL;
 }
 
-// Deposit money
 bool deposit(Bank* bank, int accountNumber, double amount) {
     if (amount <= 0) {
         printf("Invalid deposit amount.\n");
@@ -103,10 +118,10 @@ bool deposit(Bank* bank, int accountNumber, double amount) {
 
     account->balance += amount;
     printf("Deposit successful. New balance: $%.2f\n", account->balance);
+    saveAccountsToFile(bank);
     return true;
 }
 
-// Withdraw money
 bool withdraw(Bank* bank, int accountNumber, double amount) {
     if (amount <= 0) {
         printf("Invalid withdrawal amount.\n");
@@ -120,13 +135,11 @@ bool withdraw(Bank* bank, int accountNumber, double amount) {
     }
 
     if (account->accountType == 'S') {
-        // Savings account - check minimum balance
         if (account->balance - amount < MINIMUM_BALANCE) {
             printf("Withdrawal failed. Minimum balance requirement not met.\n");
             return false;
         }
     } else {
-        // Checking account - check overdraft limit
         if (account->balance - amount < -OVERDRAFT_LIMIT) {
             printf("Withdrawal failed. Overdraft limit exceeded.\n");
             return false;
@@ -135,10 +148,10 @@ bool withdraw(Bank* bank, int accountNumber, double amount) {
 
     account->balance -= amount;
     printf("Withdrawal successful. New balance: $%.2f\n", account->balance);
+    saveAccountsToFile(bank);
     return true;
 }
 
-// Display account details
 void displayAccount(const Account* account) {
     if (account == NULL) {
         printf("Account not found.\n");
@@ -152,22 +165,18 @@ void displayAccount(const Account* account) {
     printf("Balance: $%.2f\n", account->balance);
 }
 
-// Display all accounts
 void displayAllAccounts(const Bank* bank) {
-    int i;
     if (bank->accountCount == 0) {
         printf("No accounts to display.\n");
         return;
     }
 
-    for (i = 0; i < bank->accountCount; i++) {
+    for (int i = 0; i < bank->accountCount; i++) {
         displayAccount(&bank->accounts[i]);
         printf("----------------------\n");
     }
 }
 
-
-// Display menu
 void displayMenu() {
     printf("\n--- Bank Management System ---\n");
     printf("1. Create Savings Account\n");
@@ -177,28 +186,28 @@ void displayMenu() {
     printf("5. Delete Account\n");
     printf("6. View Account Details\n");
     printf("7. View All Accounts\n");
-    printf("8. Exit\n");
+    printf("8. Add Interest to Savings Accounts\n");
+    printf("9. Save Bank Data\n");
+    printf("10. Load Bank Data\n");
+    printf("11. Exit\n");
     printf("Enter your choice: ");
 }
 
-// Handle account creation
 void handleCreateAccount(Bank* bank) {
     char name[MAX_NAME_LENGTH];
     double initialDeposit;
-    char accountType;
 
     printf("Enter name: ");
     scanf(" %[^\n]s", name);
     printf("Enter initial deposit: ");
     scanf("%lf", &initialDeposit);
 
-    int accountNumber = createAccount(bank, name, initialDeposit, accountType);
+    int accountNumber = createAccount(bank, name, initialDeposit, 'S');
     if (accountNumber != -1) {
         printf("Account created successfully. Account Number: %d\n", accountNumber);
     }
 }
 
-// Handle deposit
 void handleDeposit(Bank* bank) {
     int accountNumber;
     double amount;
@@ -211,7 +220,6 @@ void handleDeposit(Bank* bank) {
     deposit(bank, accountNumber, amount);
 }
 
-// Handle withdrawal
 void handleWithdraw(Bank* bank) {
     int accountNumber;
     double amount;
@@ -224,7 +232,6 @@ void handleWithdraw(Bank* bank) {
     withdraw(bank, accountNumber, amount);
 }
 
-// Handle account deletion
 void handleDeleteAccount(Bank* bank) {
     int accountNumber;
 
@@ -238,7 +245,6 @@ void handleDeleteAccount(Bank* bank) {
     }
 }
 
-// Handle viewing account
 void handleViewAccount(Bank* bank) {
     int accountNumber;
 
@@ -249,10 +255,69 @@ void handleViewAccount(Bank* bank) {
     displayAccount(account);
 }
 
+bool saveBankData(const Bank* bank) {
+    FILE* file = fopen(FILENAME, "wb");
+    if (file == NULL) {
+        printf("Error opening file for writing.\n");
+        return false;
+    }
+
+    // Write bank data
+    fwrite(&bank->accountCount, sizeof(int), 1, file);
+    fwrite(&bank->nextAccountNumber, sizeof(int), 1, file);
+    
+    // Write all accounts
+    for (int i = 0; i < bank->accountCount; i++) {
+        fwrite(&bank->accounts[i], sizeof(Account), 1, file);
+    }
+
+    fclose(file);
+    printf("Bank data saved successfully.\n");
+    return true;
+}
+
+bool loadBankData(Bank* bank) {
+    FILE* file = fopen(FILENAME, "rb");
+    if (file == NULL) {
+        printf("No existing bank data found.\n");
+        return false;
+    }
+
+    // Read bank data
+    fread(&bank->accountCount, sizeof(int), 1, file);
+    fread(&bank->nextAccountNumber, sizeof(int), 1, file);
+    
+    // Read all accounts
+    for (int i = 0; i < bank->accountCount; i++) {
+        fread(&bank->accounts[i], sizeof(Account), 1, file);
+    }
+
+    fclose(file);
+    printf("Bank data loaded successfully.\n");
+    return true;
+}
+
+// Add interest to savings accounts
+void addInterestToSavings(Bank* bank) {
+    const double INTEREST_RATE = 0.05;
+    int i;
+    for (i = 0; i < bank->accountCount; i++) {
+        if (bank->accounts[i].accountType == 'S') {
+            double interest = bank->accounts[i].balance * INTEREST_RATE;
+            bank->accounts[i].balance += interest;
+            printf("Interest added to account %d: $%.2f\n", 
+                   bank->accounts[i].accountNumber, interest);
+        }
+    }
+}
+
 int main() {
     Bank bank;
     initializeBank(&bank);
     int choice;
+
+    // Try to load existing data
+    loadBankData(&bank);
 
     do {
         displayMenu();
@@ -282,12 +347,23 @@ int main() {
                 displayAllAccounts(&bank);
                 break;
             case 8:
+                addInterestToSavings(&bank);
+                break;
+            case 9:
+                saveBankData(&bank);
+                break;
+            case 10:
+                loadBankData(&bank);
+                break;
+            case 11:
+                printf("Saving data before exit...\n");
+                saveBankData(&bank);
                 printf("Exiting. Thank you!\n");
                 break;
             default:
                 printf("Invalid choice. Try again.\n");
         }
-    } while (choice != 8);
+    } while (choice != 11);
 
     return 0;
 }
